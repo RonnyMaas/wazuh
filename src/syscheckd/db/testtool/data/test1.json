@@ -1,0 +1,14 @@
+{
+    "action": "DB_INSERT",
+    "table": "FILE",
+    "data": [
+        {
+            "path": "/test",
+            "checksum": "1234567"
+        },
+        {
+            "path": "...",
+            "checksum": ".."
+        }
+    ]
+}

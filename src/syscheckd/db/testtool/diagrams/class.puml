@@ -1,0 +1,37 @@
+@startuml db_class
+package "testtool" <<Folder>> #DDDDDD{
+    enum "action_type" {
+        DB_INSERT
+        DB_REMOVE
+        DB_UPDATE
+    }
+    package "action" <<Folder>> {
+        abstract TestAction {
+            - string m_dbPath
+            - FimDB m_database
+            - int m_actionId
+            - string m_outPath
+            + void execute(nlohman::json& action_data)
+        }
+        class InsertAction {
+            + void execute(nlohman::json& action_data)
+        }
+        class UpdateAction {
+            + void execute(nlohman::json& action_data)
+        }
+        class RemoveAction {
+            + void execute(nlohman::json& action_data)
+        }
+    }
+    interface "Main"  <<(F,#FF7700)>> {
+        + std::vector<TestAction> ReadJson(std::string path)
+        + main()
+
+    }
+}
+
+TestAction <|-- InsertAction
+TestAction <|-- UpdateAction
+TestAction <|-- RemoveAction
+Main -- TestAction
+@enduml
