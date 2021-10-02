@@ -1963,6 +1963,7 @@ bool fill_data_dbsync(cJSON *data, const struct deltas_fields_match_list * field
     static const int NULL_TEXT_LENGTH = 4;
     static const int SEPARATOR_LENGTH = 1;
     struct deltas_fields_match_list const * head = field_list;
+
     while (NULL != head) {
         const cJSON *key = cJSON_GetObjectItem(data, head->current.key);
         if (NULL != key) {
@@ -1998,6 +1999,23 @@ bool fill_data_dbsync(cJSON *data, const struct deltas_fields_match_list * field
     return ret_val;
 }
 
+void fill_event_alert( Eventinfo * lf, const struct deltas_fields_match_list * field_list, const char * operation, char * response) {
+    if (NULL != lf && NULL != operation && NULL != response) {
+        char *field_value = strtok(response, FIELD_SEPARATOR_DBSYNC);
+        struct deltas_fields_match_list const * head = field_list;
+        while (NULL != head) {
+            if (field_value) {
+                if (strlen(head->current.value) != 0) {
+                    fillData(lf, head->current.value, field_value);
+                }
+                field_value = strtok(NULL, FIELD_SEPARATOR_DBSYNC);
+            }
+            head = head->next;
+        }
+        fillData(lf, "operation_type", operation);
+    }
+}
+
 int decode_dbsync( Eventinfo * lf, char *msg_type, cJSON *logJSON, int *socket) {
     int ret_val = -1;
     if (NULL != msg_type && NULL != lf && NULL != lf->agent_id && NULL != logJSON) {
@@ -2013,16 +2031,28 @@ int decode_dbsync( Eventinfo * lf, char *msg_type, cJSON *logJSON, int *socket) 
 
                 if (NULL != field_list) {
                     char *response = NULL;
+                    os_calloc(OS_SIZE_6144, sizeof(char), response);
                     char header[OS_SIZE_256] = { 0 };
-                    os_calloc(OS_SIZE_128, sizeof(char), response);
-                    int header_size = snprintf(header, OS_SIZE_256 - 1, "agent %s dbsync %s %s ", lf->agent_id, type, cJSON_GetStringValue(operation_object));
+                    char * operation = cJSON_GetStringValue(operation_object);
+                    int header_size = snprintf(header, OS_SIZE_256 - 1, "agent %s dbsync %s %s ", lf->agent_id, type, operation);
 
                     buffer_t *msg = buffer_initialize(OS_SIZE_6144);
                     buffer_push(msg, header, header_size);
                     if (fill_data_dbsync(data, field_list, msg) && TRUE == msg->status) {
-                        ret_val = wdbc_query_ex(socket, msg->data, response, OS_SIZE_128);
+                        ret_val = wdbc_query_ex(socket, msg->data, response, OS_SIZE_6144);
                         if (ret_val != 0) {
                             merror("Wazuh-db query error, check wdb logs.");
+                        } else {
+                            if (strcmp(operation, "INSERTED") == 0) {
+                                fill_event_alert(lf, field_list, operation, msg->data);
+                            } else {
+                                char *response_data = strtok(response, " ");
+                                if (response_data = strtok(NULL, "\0"), response_data != NULL) {
+                                    fill_event_alert(lf, field_list, operation, response_data);
+                                } else {
+                                    merror("Response without content, the event cannot be raised.");
+                                }
+                            }
                         }
                     } else {
                         merror("Error in fill data population");
